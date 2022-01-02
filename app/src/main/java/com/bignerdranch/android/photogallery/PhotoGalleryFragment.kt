@@ -7,10 +7,9 @@ import android.nfc.Tag
 import android.os.Bundle
 import android.os.Handler
 import android.util.Log
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
+import android.view.*
 import android.widget.ImageView
+import android.widget.SearchView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
@@ -37,6 +36,7 @@ class PhotoGalleryFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         retainInstance = true
+        setHasOptionsMenu(true)
         photoGalleryViewModel =
             ViewModelProviders.of(this).get(PhotoGalleryViewModel::class.java)
         val responseHandler = Handler()
@@ -77,6 +77,43 @@ class PhotoGalleryFragment : Fragment() {
         lifecycle.removeObserver(
             thumbnailDownloader.fragmentLifecycleObserver
         )
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu, inflater: MenuInflater) {
+        super.onCreateOptionsMenu(menu, inflater)
+        inflater.inflate(R.menu.fragment_photo_gallery, menu)
+
+        var searchItem: MenuItem = menu.findItem(R.id.menu_item_search)
+        var searchView = searchItem.actionView as SearchView
+
+        searchView.apply {
+            setOnQueryTextListener(object : SearchView.OnQueryTextListener {
+                override fun onQueryTextSubmit(query: String?): Boolean {
+                    Log.d(TAG, "QueryTextSubmitted: $query")
+                    photoGalleryViewModel.fetchPhotos(query!!)
+                    return true
+                }
+
+                override fun onQueryTextChange(newText: String?): Boolean {
+                    Log.d(TAG, "QueryTextChange: $query")
+                    return false
+                }
+            })
+
+            setOnSearchClickListener {
+                searchView.setQuery(photoGalleryViewModel.searchTerm, false)
+            }
+        }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.menu_item_clear -> {
+                photoGalleryViewModel.fetchPhotos("")
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
     }
 
     private class PhotoHolder(private val itemTextView: ImageView): RecyclerView.ViewHolder(itemTextView)
