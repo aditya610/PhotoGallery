@@ -18,6 +18,7 @@ import androidx.lifecycle.Observer
 import androidx.lifecycle.ViewModelProviders
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import androidx.work.*
 import com.bignerdranch.android.photogallery.FlickrApi.FlickrApi
 import com.bignerdranch.android.photogallery.FlickrApi.FlickrFetchr
 import retrofit2.Call
@@ -25,8 +26,11 @@ import retrofit2.Callback
 import retrofit2.Response
 import retrofit2.Retrofit
 import retrofit2.converter.scalars.ScalarsConverterFactory
+import java.util.concurrent.TimeUnit
 
 private const val TAG = "PhotoGalleryFragment"
+private const val POLL_WORK = "POLL_WORK"
+
 class PhotoGalleryFragment : Fragment() {
 
     private lateinit var photoGalleryViewModel: PhotoGalleryViewModel
@@ -46,6 +50,18 @@ class PhotoGalleryFragment : Fragment() {
                 photoHolder.bindDrawable(drawable)
             }
         lifecycle.addObserver(thumbnailDownloader.fragmentLifecycleObserver)
+
+//        val constrains = Constraints.Builder()
+//            .setRequiredNetworkType(NetworkType.UNMETERED)
+//            .build()
+//
+//        val workRequest = OneTimeWorkRequest
+//            .Builder(PollWorker::class.java)
+//            .setConstraints(constrains)
+//            .build()
+//
+//        WorkManager.getInstance()
+//            .enqueue(workRequest)
     }
 
     override fun onCreateView(
@@ -100,6 +116,14 @@ class PhotoGalleryFragment : Fragment() {
                 }
             })
 
+            val toggleItem = menu.findItem(R.id.menu_item_toggle_polling)
+            val isPolling = QueryPreferrence.isPolling(requireContext())
+            val toggleItemTitle = if (isPolling) {
+                R.string.stop_polling
+            } else {
+                R.string.start_polling
+            }
+            toggleItem.title = toggleItemTitle.toString()
             setOnSearchClickListener {
                 searchView.setQuery(photoGalleryViewModel.searchTerm, false)
             }
@@ -111,6 +135,27 @@ class PhotoGalleryFragment : Fragment() {
             R.id.menu_item_clear -> {
                 photoGalleryViewModel.fetchPhotos("")
                 true
+            }
+            R.id.menu_item_toggle_polling -> {
+                val isPolling = QueryPreferrence.isPolling(requireContext())
+                if (isPolling) {
+                    WorkManager.getInstance().cancelUniqueWork(POLL_WORK)
+                    QueryPreferrence.setPolling(requireContext(), false)
+                } else {
+                    val constraints = Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.UNMETERED)
+                        .build()
+                    val periodicRequest = PeriodicWorkRequest
+                        .Builder(PollWorker::class.java, 15 , TimeUnit.MINUTES)
+                        .setConstraints(constraints)
+                        .build()
+                    WorkManager.getInstance().enqueueUniquePeriodicWork(POLL_WORK,
+                    ExistingPeriodicWorkPolicy.KEEP,
+                    periodicRequest)
+                    QueryPreferrence.setPolling(requireContext(), true)
+                }
+                activity?.invalidateOptionsMenu()
+                return true
             }
             else -> super.onOptionsItemSelected(item)
         }
